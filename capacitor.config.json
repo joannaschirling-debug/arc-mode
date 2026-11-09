@@ -1,0 +1,9 @@
+{
+  "appId": "de.joey.arcmode",
+  "appName": "Arc Mode",
+  "webDir": "dist",
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "LocalNotifications": { "smallIcon": "ic_stat_arc", "iconColor": "#6c58d1" }
+  }
+}
