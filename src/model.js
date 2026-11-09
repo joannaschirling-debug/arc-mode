@@ -1,6 +1,6 @@
 // Domain logic: tasks (pool + today's focus), events, routines, tags, reminders.
 import { S, put, putMany, delMany, all } from "./store.js";
-import { today, addDays, mondayOf, parse, uid, minutesOf, daysUntil } from "./util.js";
+import { ymd, today, addDays, mondayOf, parse, uid, minutesOf, daysUntil } from "./util.js";
 import { deviceEvents, schedule, cancel, pendingIds } from "./native.js";
 
 export const DEFAULT_TAGS = [
@@ -117,7 +117,7 @@ export function habitRate(id, days = 30) {
 export const focusOn = d => (S.timelog[d]?.entries || []).reduce((a, e) => a + (e.focusMin || 0), 0);
 export function weekFocus(ws = mondayOf(today())) { let m = 0; for (let i = 0; i < 7; i++) m += focusOn(addDays(ws, i)); return m; }
 export function logSession(entry) {
-  const d = entry.start.slice(0, 10) === today() ? today() : entry.start.slice(0, 10);
+  const d = ymd(new Date(entry.start));
   const entries = [...(S.timelog[d]?.entries || []), entry];
   put("timelog", d, { entries });
 }

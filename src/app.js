@@ -118,7 +118,7 @@ function viewPlan() {
     body = `<div class="chips"><button data-act="filter" data-id="" aria-pressed="${!UI.filter}">Alle</button>${M.tags().map(t => `<button data-act="filter" data-id="${t.id}" aria-pressed="${UI.filter === t.id}"><i style="width:8px;height:8px;border-radius:50%;background:${esc(t.color)}"></i>${esc(t.name)}</button>`).join("")}</div>
       <button class="add" data-act="newTask">+ Aufgabe in den Pool</button>
       ${od ? `<div class="banner" style="background:var(--bad-soft)"><div class="tx"><b>${od} überfällig</b> · alte Sachen, die nicht mehr dran sind?</div><button class="btn small danger" data-act="clearOverdue">Alle löschen</button></div>` : ""}
-      ${Object.entries(g).map(([name, list]) => list.length ? `<div class="grp ${name === "Überfällig" ? "red" : ""}">${name} · ${list.length}</div><div class="card">${list.map(x => taskRow(x, { pool: true })).join("")}</div>` : "").join("")}
+      ${Object.entries(g).map(([name, list]) => { if (!list.length) return ""; const fold = name === "Später" && list.length > 8, open = !fold || UI.open.later; return `<div class="grp ${name === "Überfällig" ? "red" : ""}">${name} · ${list.length}</div>${open ? `<div class="card">${list.map(x => taskRow(x, { pool: true })).join("")}</div>` : ""}${fold ? `<button class="btn ghost small" data-act="toggleOpen" data-id="later">${open ? "▾ Einklappen" : "▸ " + list.length + " spätere Aufgaben anzeigen"}</button>` : ""}`; }).join("")}
       ${Object.values(g).every(l => !l.length) ? `<div class="empty">Der Pool ist leer.</div>` : ""}
       ${doneRecently()}`;
   } else if (UI.planTab === "termine") {
@@ -204,7 +204,7 @@ function viewTimer() {
     <label class="flex muted" style="font-size:.85rem"><input type="checkbox" data-act="tSound" ${TM.cfg.sound ? "checked" : ""}> Ton beim Phasenwechsel</label>
   </div>
   <section class="sec"><div class="sec-h"><h2>Heute erfasst · ${hm(M.focusOn(today()))}</h2><button class="btn ghost small" data-act="addLog">+ Nachtragen</button></div>
-    <div class="card">${todayLog.map(e => `<div class="item"><div class="tx"><span>${esc(M.tag(e.category).name)}${e.taskId && S.tasks[e.taskId] ? " · " + esc(S.tasks[e.taskId].title) : ""}</span><small class="num">${e.start.slice(11, 16)}–${e.end.slice(11, 16)} · ${e.focusMin} min Fokus${e.breakMin ? " · " + e.breakMin + " min Pause" : ""}</small></div><button class="btn ghost small" data-act="delLog" data-id="${e.id}" aria-label="Löschen">✕</button></div>`).join("") || `<div class="empty">Heute noch nichts erfasst.</div>`}</div></section>`;
+    <div class="card">${todayLog.map(e => `<div class="item"><div class="tx"><span>${esc(M.tag(e.category).name)}${e.taskId && S.tasks[e.taskId] ? " · " + esc(S.tasks[e.taskId].title) : ""}</span><small class="num">${new Date(e.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}–${new Date(e.end).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} · ${e.focusMin} min Fokus${e.breakMin ? " · " + e.breakMin + " min Pause" : ""}</small></div><button class="btn ghost small" data-act="delLog" data-id="${e.id}" aria-label="Löschen">✕</button></div>`).join("") || `<div class="empty">Heute noch nichts erfasst.</div>`}</div></section>`;
 }
 function renderFS() {
   let fs = $("#fs");
