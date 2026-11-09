@@ -172,7 +172,7 @@ function timerDots(t) {
 }
 function timerControls(t) {
   if (!t) return `<button class="btn primary" data-act="tStart">Start</button>`;
-  return `${t.pausedAt ? `<button class="btn primary" data-act="tResume">Weiter</button>` : `<button class="btn" data-act="tPause">Pause</button>`}
+  return `${t.pausedAt ? `<button class="btn primary" data-act="tResume">Weiter</button>` : `<button class="btn" data-act="tPause">Anhalten</button>`}
     ${t.preset !== "free" ? `<button class="btn" data-act="tSkip">${t.phase === "focus" ? "Pause starten" : "Pause beenden"}</button>` : ""}
     <button class="btn" data-act="tStop">Beenden</button>`;
 }
@@ -454,7 +454,6 @@ onBack(() => { if (dlg().open) dlg().close(); else if (UI.fs) { UI.fs = false; r
 async function boot() {
   document.body.insertAdjacentHTML("beforeend", '<div id="black" aria-hidden="true"></div>');
   await initStore();
-  seedIfEmpty();
   M.rollOverFocus();
   onChange(render);
   render();
