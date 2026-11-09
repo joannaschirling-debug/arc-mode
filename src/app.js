@@ -4,7 +4,7 @@ import { S, put, del, onChange, initStore, sync, signIn, signUp, signOut, invite
 import { $, $$, esc, pad, today, addDays, parse, fmtDay, daysUntil, mondayOf, kw, hm, mmss, WD, WDL, MON, local, ring, CHEV, nowHM, minutesOf, uid } from "./util.js";
 import * as M from "./model.js";
 import * as TM from "./timer.js";
-import { isNative, calendarAvailable, calendarPermission, listCalendars, createDeviceEvent, onResume, onBack, ensureNotifPermission, unlockAudio, keepAwake } from "./native.js";
+import { isNative, calendarAvailable, calendarPermission, listCalendars, createDeviceEvent, deleteDeviceEvent, onResume, onBack, ensureNotifPermission, unlockAudio, keepAwake } from "./native.js";
 
 /* ---------- ui state ---------- */
 const TABS = [["heute", "Heute"], ["plan", "Plan"], ["timer", "Timer"], ["routine", "Routine"], ["mehr", "Mehr"]];
@@ -131,14 +131,12 @@ function viewHeute() {
   const routines = h < 12 ? [routineCard("morning")] : h >= 17 ? [routineCard("evening")] : [];
   return `
   <div class="topbar">${brand()}${syncBadge()}</div>
-  <div class="hero ${phaseCls}"><svg class="hero-deco" viewBox="0 0 300 300" aria-hidden="true"><circle cx="150" cy="150" r="60"/><circle cx="150" cy="150" r="95"/><circle cx="150" cy="150" r="130"/></svg>
-    <div class="hero-top"><div><div class="eyebrow">${WDL[d.getDay()]} · KW ${kw(t)}</div><h1>${d.getDate()}. ${MON[d.getMonth()]}</h1>
-      <div class="next">${nextAppt ? `<span class="muted">Nächster Termin · ${esc(nextAppt.time)}</span><b>${esc(nextAppt.title)}</b>` : nextTask ? `<span class="muted">Als Nächstes</span><b>${esc(nextTask.title)}</b>` : `<span class="muted">Keine festen Termine mehr heute.</span>`}</div></div>
-      <div class="ring">${ring(pr.total ? pr.done / pr.total : 0, 100, 10, "var(--accent)")}<div class="v"><div><b class="num">${pr.done}/${pr.total}</b><small>heute erledigt</small></div></div></div></div>
-    ${v ? `<div class="verse">${esc(v.text)}<cite>${esc(v.ref)}</cite></div>` : ""}
-  </div>
+  <div class="today-h"><div><div class="eyebrow">${WDL[d.getDay()]} · KW ${kw(t)}</div><h1 class="page-title">${d.getDate()}. ${MON[d.getMonth()]}</h1></div>
+    <div class="ring sm">${ring(pr.total ? pr.done / pr.total : 0, 100, 11, "var(--accent)")}<div class="v"><b class="num">${pr.done}/${pr.total}</b></div></div></div>
+  ${nextAppt || nextTask ? `<div class="nextline"><span class="muted">${nextAppt ? "Nächster Termin · " + esc(nextAppt.time) : "Als Nächstes"}</span> <b>${esc((nextAppt || nextTask).title)}</b></div>` : ""}
+  ${v ? `<div class="verse sm">${esc(v.text)} <cite>${esc(v.ref)}</cite></div>` : ""}
   ${timer ? `<div class="banner"><div class="tx"><b>${timer.pausedAt ? "Timer pausiert" : timer.phase === "break" ? "Pause läuft" : "Fokus läuft"}</b> · ${esc(M.tag(timer.category).name)}</div><button class="btn primary small" data-go="timer">Öffnen</button></div>` : ""}
-  ${cds.length ? `<div class="widgets" aria-label="Countdowns">${cds.map(e => { const n = Math.max(0, daysUntil(e.date)); return `<button class="w ${e.kind === "klausur" || e.kind === "pruefung" ? "exam" : ""} ${n <= 3 ? "soon" : ""}" style="border:0;text-align:left;color:inherit" data-act="editEvent" data-id="${e.id}"><span class="kind">${KIND[e.kind] || "Termin"}</span><span class="cd"><span class="big">${n === 0 ? "Heute" : n}</span><span class="unit">${n === 0 ? "" : n === 1 ? "Tag" : "Tage"}</span></span><span class="lbl">${esc(e.short || e.title)}</span></button>`; }).join("")}</div>` : ""}
+  ${cds.length ? `<div class="cds">${cds.slice(0, UI.open.cdAll ? 99 : 4).map(e => { const n = Math.max(0, daysUntil(e.date)); return `<button class="cd ${e.kind === "klausur" || e.kind === "pruefung" ? "exam" : ""} ${n <= 3 ? "soon" : ""}" data-act="editEvent" data-id="${e.id}"><b class="num">${n === 0 ? "heute" : n + " T"}</b><span>${esc(e.short || e.title)}</span></button>`; }).join("")}${cds.length > 4 ? `<button class="cd more" data-act="toggleOpen" data-id="cdAll">${UI.open.cdAll ? "weniger" : "+" + (cds.length - 4) + " mehr"}</button>` : ""}</div>` : ""}
   <section class="sec"><div class="sec-h"><h2>Termine heute</h2><button class="btn ghost small" data-act="newEvent" data-date="${t}">+ Termin</button></div>
     <div class="card">${timeline(t, appts)}</div></section>
   <section class="sec"><div class="sec-h"><h2>Heute-Fokus</h2><button class="btn ghost small" data-act="pickFocus">+ Aus Pool</button></div>
@@ -191,19 +189,30 @@ function doneRecently() {
 const settings = M.settings;
 
 /* ---------- Timer ---------- */
-function timerFace(t, big = false) {
-  const view = TM.cfg.view, n = new Date();
-  const free = t ? t.preset === "free" : TM.cfg.preset === "free";
+function faceVals(t) {
+  const view = TM.cfg.view, n = new Date(), free = t ? t.preset === "free" : TM.cfg.preset === "free";
   const len = t ? TM.phaseLen(t) : 0, rem = t ? TM.remaining(t) : 0, el = t ? TM.elapsed(t) : 0;
-  const color = !t ? "var(--accent)" : t.phase === "break" ? "var(--break)" : "var(--focus)";
-  const track = big ? "rgb(255 255 255 / .12)" : "var(--sunk)";
+  const split = sec => { sec = Math.max(0, Math.round(sec)); return sec >= 3600 ? [String(Math.floor(sec / 3600)), pad(Math.floor(sec % 3600 / 60))] : [pad(Math.floor(sec / 60)), pad(sec % 60)]; };
+  const startMin = TM.cfg.preset === "custom" ? TM.cfg.custom.focus : TM.PRESETS[TM.cfg.preset].focus;
+  const state = !t ? "Bereit" : t.pausedAt ? (t.autoPaused && TM.cfg.mode === "flip" ? "Handy umdrehen" : "Angehalten") : t.preset === "free" ? "Fokus" : t.phase === "focus" ? "Fokus" : "Pause";
+  let a, b, sub;
+  if (view === "clock") { [a, b] = [pad(n.getHours()), pad(n.getMinutes())]; sub = !t ? "" : state + " · " + (free ? mmss(el / 1000) + " gelernt" : "noch " + mmss(rem / 1000)); }
+  else if (view === "watch") { [a, b] = split(t ? (t.phase === "focus" ? TM.focusTotal(t) : el) / 1000 : 0); sub = !t ? "Stoppuhr" : t.phase === "focus" ? state + " · gesamt" : "Pause"; }
+  else { [a, b] = split(!t ? (free ? 0 : startMin * 60) : free ? el / 1000 : rem / 1000); sub = state; }
   const frac = !t ? 0 : free ? (el / 60000 % 60) / 60 : len ? 1 - rem / len : 0;
-  const startTxt = free ? "00:00" : pad(TM.cfg.preset === "custom" ? TM.cfg.custom.focus : TM.PRESETS[TM.cfg.preset].focus) + ":00";
-  let main, sub;
-  if (view === "clock") { main = pad(n.getHours()) + ":" + pad(n.getMinutes()); sub = !t ? "Bereit" : free ? mmss(el / 1000) + " gelernt" : "noch " + mmss(rem / 1000); }
-  else if (view === "watch") { main = t ? mmss((t.phase === "focus" ? TM.focusTotal(t) : el) / 1000) : "00:00"; sub = !t ? "Stoppuhr" : t.phase === "focus" ? "Fokus gesamt" : "Pause"; }
-  else { main = !t ? startTxt : free ? mmss(el / 1000) : mmss(rem / 1000); sub = !t ? "Bereit" : t.pausedAt ? (t.autoPaused && TM.cfg.mode === "flip" ? "Handy umdrehen" : "Pausiert") : t.phase === "focus" ? "Fokus" : "Pause"; }
-  return `<div class="face ${view === "clock" ? "clock" : ""}">${ring(view === "clock" && t && !free ? 1 - rem / (len || 1) : frac, 200, 7, color, track)}<div><div class="big num" id="tmain">${main}</div><div class="sub" id="tsub">${esc(sub)}</div></div></div>`;
+  return { a, b, sub, frac, label: view === "clock" ? "" : !t ? "" : t.phase === "break" ? "PAUSE" : "FOKUS" };
+}
+function timerFace(t) {
+  const v = faceVals(t);
+  return `<div class="flipwrap"><div class="flipface"><div class="fcard" data-k="a"><span class="flab">${v.label}</span><b>${v.a}</b></div><div class="fcard" data-k="b"><b>${v.b}</b></div></div>
+    <div class="fsub">${esc(v.sub)}</div><div class="fbar"><i style="width:${(v.frac * 100).toFixed(1)}%"></i></div></div>`;
+}
+function updateFace(root, t) {
+  if (!root) return; const v = faceVals(t);
+  ["a", "b"].forEach(k => { const card = root.querySelector(`.fcard[data-k="${k}"]`); if (!card) return; const el = card.querySelector("b"); if (el.textContent !== v[k]) { el.textContent = v[k]; card.classList.remove("flip"); void card.offsetWidth; card.classList.add("flip"); } });
+  const s1 = root.querySelector(".fsub"); if (s1 && s1.textContent !== v.sub) s1.textContent = v.sub;
+  const l = root.querySelector(".flab"); if (l && l.textContent !== v.label) l.textContent = v.label;
+  const bar = root.querySelector(".fbar i"); if (bar) bar.style.width = (v.frac * 100).toFixed(1) + "%";
 }
 function timerDots(t) {
   if (!t || t.preset === "free") return "";
@@ -252,39 +261,49 @@ function renderFS() {
   if (!fs) { fs = document.createElement("div"); fs.id = "fs"; document.body.append(fs); }
   const t = TM.T();
   fs.className = "on " + (t?.phase === "break" ? "break" : "");
-  fs.innerHTML = `<div class="phase-l">${!t ? "Bereit" : t.phase === "break" ? "Pause" : "Fokus"}${t ? " · " + esc(M.tag(t.category).name) : ""}</div>${timerFace(t, true)}${timerDots(t)}<div class="ctrl">${timerControls(t)}<button class="btn" data-act="fullscreen">Schließen</button></div>`;
+  fs.innerHTML = `<div class="phase-l">${!t ? "Bereit" : t.phase === "break" ? "Pause" : "Fokus"}${t ? " · " + esc(M.tag(t.category).name) : ""}</div>${timerFace(t)}${timerDots(t)}<div class="ctrl">${timerControls(t)}<button class="btn" data-act="fullscreen">Schließen</button></div>`;
 }
 function updateTimerLive() {
   const t = TM.T();
   if (TM.tick()) { render(); return; }
-  if (UI.tab === "timer" || UI.fs) {
-    $$("#fs #tmain, main #tmain").forEach(() => {});
-    if (UI.fs) renderFS();
-    if (UI.tab === "timer") { const f = $("main .face"); if (f) f.outerHTML = timerFace(t); }
-  }
+  if (UI.tab === "timer") updateFace($("main .flipwrap"), t);
+  if (UI.fs) updateFace($("#fs .flipwrap"), t);
   const black = $("#black"); if (black) black.classList.toggle("on", TM.flipState.active && TM.flipState.down && !!t && t.phase === "focus" && !t.pausedAt);
 }
 
 /* ---------- Routine ---------- */
 function viewRoutine() {
-  const t = today(), weeks = UI.heatWeeks, start = addDays(mondayOf(t), -(weeks - 1) * 7);
-  const cell = (d) => {
-    if (d > t) return `<span class="hc future"></span>`;
-    const m = M.routineFrac("morning", d), e = M.routineFrac("evening", d);
-    const col = (f, base) => f === null ? "transparent" : f === 0 ? "var(--sunk)" : `color-mix(in srgb,${base} ${Math.round(25 + 75 * f)}%,var(--sunk))`;
-    return `<button class="hc ${d === t ? "today" : ""}" data-act="heatDay" data-id="${d}" aria-label="${fmtDay(d)}: Morgen ${m === null ? "–" : Math.round(m * 100) + " %"}, Abend ${e === null ? "–" : Math.round(e * 100) + " %"}"><i style="background:${col(m, "var(--morning-ink)")}"></i><i style="background:${col(e, "var(--accent)")}"></i></button>`;
-  };
-  let grid = `<span></span>${["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map(x => `<span class="hd">${x}</span>`).join("")}`;
-  for (let w = 0; w < weeks; w++) { const ws = addDays(start, w * 7); grid += `<span class="wl">KW ${kw(ws)}</span>` + [...Array(7)].map((_, i) => cell(addDays(ws, i))).join(""); }
-  const sel = UI.heatDay || t;
+  const t = today(), ws = UI.rWeek || mondayOf(t), days = [...Array(7)].map((_, i) => addDays(ws, i));
   const stats = ph => M.habits().filter(h => h.phase === ph).map(h => { const r = M.habitRate(h.id, 30); return `<div class="hstat"><span>${esc(h.name)}</span><b>${r.done}/${r.total}</b><span class="muted num" style="min-width:3.2em;text-align:right">${r.total ? Math.round(100 * r.done / r.total) : 0} %</span></div>`; }).join("");
   return `<div class="topbar">${brand()}${syncBadge()}</div><h1 class="page-title">Routine</h1>
-  <div class="stats"><div class="stat"><span class="ic" style="background:var(--morning);color:var(--morning-ink)">☀</span><div><b>${M.routineStreak("morning")} Tage</b><span>Serie Morgen</span></div></div><div class="stat"><span class="ic">☾</span><div><b>${M.routineStreak("evening")} Tage</b><span>Serie Abend</span></div></div></div>
-  <section class="sec"><div class="sec-h"><h2>Verlauf</h2><div class="seg small">${[[4, "4 W"], [12, "12 W"], [26, "6 M"]].map(([k, l]) => `<button data-act="heatWeeks" data-id="${k}" aria-pressed="${weeks === k}">${l}</button>`).join("")}</div></div>
-    <div class="card"><div class="heat">${grid}</div><div class="legend"><span><i style="background:var(--morning-ink)"></i>oben Morgen</span><span><i style="background:var(--accent)"></i>unten Abend</span><span>kräftiger = mehr geschafft</span></div></div></section>
-  <section class="sec"><div class="sec-h"><h2>${sel === t ? "Heute" : WDL[parse(sel).getDay()] + ", " + fmtDay(sel).slice(3)}</h2>${sel !== t ? `<button class="btn ghost small" data-act="heatDay" data-id="${t}">Heute</button>` : ""}</div>
-    ${routineCardFor("morning", sel)}${routineCardFor("evening", sel)}</section>
-  <section class="sec"><div class="sec-h"><h2>Letzte 30 Tage</h2></div><div class="card"><div class="grp" style="padding:10px 14px 0">Morgen</div>${stats("morning")}<div class="grp" style="padding:10px 14px 0">Abend</div>${stats("evening")}</div></section>`;
+  <div class="weekhead"><button class="nav" data-act="rWeek" data-id="-7" aria-label="Vorige Woche">‹</button><button class="wk" data-act="rWeek" data-id="0"><b>KW ${kw(ws)} · ${fmtDay(ws)} – ${fmtDay(addDays(ws, 6))}</b>${ws !== mondayOf(t) ? "<small>↺ diese Woche</small>" : ""}</button><button class="nav" data-act="rWeek" data-id="7" aria-label="Nächste Woche">›</button></div>
+  ${habitMatrix("morning", days)}${habitMatrix("evening", days)}
+  <section class="sec"><div class="sec-h"><h2>Letzte 30 Tage</h2></div><div class="card"><div class="grp" style="padding:10px 14px 0">Morgen · Serie ${M.routineStreak("morning")} Tage</div>${stats("morning")}<div class="grp" style="padding:10px 14px 0">Abend · Serie ${M.routineStreak("evening")} Tage</div>${stats("evening")}</div></section>`;
+}
+function habitMatrix(phase, days) {
+  const t = today(), hs = M.habits().filter(h => h.phase === phase), cls = phase === "morning" ? "m" : "e";
+  const sched = (h, d) => !h.days?.length || h.days.includes(parse(d).getDay());
+  const head = `<span></span>${days.map(d => `<span class="mh ${d === t ? "today" : ""}">${WD[parse(d).getDay()]}<b>${parse(d).getDate()}</b></span>`).join("")}`;
+  const rows = hs.map(h => `<span class="mn">${esc(h.name)}</span>${days.map(d => {
+    if (!sched(h, d)) return `<span class="mc off">–</span>`;
+    if (d > t) return `<span class="mc fut"></span>`;
+    const st = M.habitState(d, h.id);
+    return `<button class="mc ${st === true ? "on" : st === "skip" ? "skip" : ""}" data-act="cycleHabit" data-id="${h.id}" data-date="${d}" aria-label="${esc(h.name)} ${fmtDay(d)}"></button>`;
+  }).join("")}`).join("");
+  // line chart: done per day, x mark at value
+  const W = 320, H = 110, padL = 26, padR = 10, padT = 14, padB = 22, n = Math.max(1, ...days.map(d => M.habitsFor(phase, d).length));
+  const x = i => padL + (W - padL - padR) * (i + .5) / 7, y = v => padT + (H - padT - padB) * (1 - v / n);
+  const pts = days.map((d, i) => { if (d > t) return null; const total = M.habitsFor(phase, d).length; if (!total) return null; const done = M.habitsFor(phase, d).filter(h => M.habitState(d, h.id) === true).length; return { i, done, total }; });
+  const line = pts.filter(Boolean).map((p, k) => `${k ? "L" : "M"}${x(p.i).toFixed(1)} ${y(p.done).toFixed(1)}`).join(" ");
+  const col = phase === "morning" ? "var(--morning-ink)" : "var(--accent)";
+  const chart = `<svg class="mchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Geschaffte Routinen pro Tag">
+    ${[0, Math.round(n / 2), n].map(v => `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${padL - 6}" y="${y(v) + 3.5}" text-anchor="end">${v}</text>`).join("")}
+    ${line ? `<path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" opacity=".55"/>` : ""}
+    ${pts.filter(Boolean).map(p => `<g stroke="${col}" stroke-width="2.4" stroke-linecap="round"><line x1="${x(p.i) - 4.5}" y1="${y(p.done) - 4.5}" x2="${x(p.i) + 4.5}" y2="${y(p.done) + 4.5}"/><line x1="${x(p.i) - 4.5}" y1="${y(p.done) + 4.5}" x2="${x(p.i) + 4.5}" y2="${y(p.done) - 4.5}"/></g><text x="${x(p.i)}" y="${y(p.done) - 9}" text-anchor="middle" class="lbl">${p.done}/${p.total}</text>`).join("")}
+    ${days.map((d, i) => `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${WD[parse(d).getDay()]}</text>`).join("")}
+  </svg>`;
+  return `<section class="routine ${cls} open"><div class="routine-h" style="cursor:default"><span class="t">${phase === "morning" ? "Morgenroutine" : "Abendroutine"}<small>Kästchen antippen: ✓ geschafft, nochmal ✕ nicht geschafft, nochmal leer</small></span><button class="btn ghost small" data-act="editRoutine" data-id="${phase}">Bearbeiten</button></div>
+    <div class="matrix">${head}${rows || `<span class="empty" style="grid-column:1/-1">Noch keine Punkte.</span>`}</div>${hs.length ? chart : ""}</section>`;
 }
 function routineCardFor(phase, d) { UI.open["r-" + phase] ??= true; return routineCard(phase, d); }
 
@@ -423,7 +442,7 @@ function render() {
   const v = { heute: viewHeute, plan: viewPlan, timer: viewTimer, routine: viewRoutine, mehr: viewMehr }[UI.tab] || viewHeute;
   $("#app").innerHTML = v(); renderTabs(); renderFS();
   TM.visibleGate(UI.tab === "timer" || UI.fs ? !document.hidden : false);
-  TM.armFlip(TM.cfg.mode === "flip" && (UI.tab === "timer" || UI.fs), render);
+  TM.armFlip(TM.cfg.mode === "flip" && (UI.tab === "timer" || UI.fs), msg => { if (msg) toast(msg); render(); });
   keepAwake(!!TM.T() && (UI.tab === "timer" || UI.fs));
   setupPinch();
   rendering = false;
@@ -441,7 +460,7 @@ const A = {
   planTab: id => { UI.planTab = id; local.set("planTab", id); render(); },
   filter: id => { UI.filter = id || null; render(); },
   zoom: n => { UI.hourH = Math.max(28, Math.min(160, Math.round(UI.hourH * (Number(n) > 0 ? 1.3 : 1 / 1.3)))); local.set("hourH", UI.hourH); render(); },
-  devInfo: id => { const a = M.appointmentsOn(UI.tab === "plan" ? UI.day : today()).find(x => x.id === id); if (!a) return; openDlg(`<form><h2>${esc(a.title)}</h2><p class="muted" style="margin:0">${a.allDay ? "ganztägig" : esc(a.time) + (a.endTime ? "–" + esc(a.endTime) : "")}${a.location ? "<br>" + esc(a.location) : ""}<br>aus dem Handy-Kalender</p><div class="drow"><button class="btn primary" value="cancel">OK</button></div></form>`); },
+  devInfo: id => { const a = M.appointmentsOn(UI.tab === "plan" ? UI.day : today()).find(x => x.id === id); if (!a) return; openDlg(`<form><h2>${esc(a.title)}</h2><p class="muted" style="margin:0">${a.allDay ? "ganztägig" : esc(a.time) + (a.endTime ? "–" + esc(a.endTime) : "")}${a.location ? "<br>" + esc(a.location) : ""}<br>aus dem Handy-Kalender</p><div class="drow"><button class="btn danger grow" value="delete">Im Handy-Kalender löschen</button><button class="btn primary" value="cancel">OK</button></div></form>`, async (f, act) => { if (act === "delete") { const ok = await deleteDeviceEvent(a.ref.devId); toast(ok ? "Termin gelöscht" : "Löschen nicht möglich"); await refreshCal(); } }); },
   goToday: () => { UI.weekStart = mondayOf(today()); UI.day = today(); render(); setTimeout(() => $("main .gnow")?.scrollIntoView({ block: "center", behavior: "smooth" }), 50); },
   week: n => { UI.weekStart = addDays(UI.weekStart, Number(n)); UI.day = UI.weekStart; render(); },
   day: id => { UI.day = id; render(); },
@@ -450,7 +469,7 @@ const A = {
   toggleOpen: id => { UI.open[id] = !(UI.open[id] ?? $(`[data-id="${id}"]`)?.getAttribute("aria-expanded") === "true"); local.set("open", UI.open); render(); },
   cycleHabit: (id, el) => { const n = M.cycleHabit(el.dataset.date || today(), id); if (n === true) buzzLite(); },
   editRoutine: id => editRoutine(id),
-  heatDay: id => { UI.heatDay = id; render(); }, heatWeeks: id => { UI.heatWeeks = Number(id); render(); },
+  rWeek: n => { UI.rWeek = Number(n) ? addDays(UI.rWeek || mondayOf(today()), Number(n)) : mondayOf(today()); render(); },
   tStart: () => { unlockAudio(); ensureNotifPermission(); const pt = local.get("pendingTask", null); local.set("pendingTask", null); TM.start({ taskId: pt }); },
   tPause: () => TM.pause(false), tResume: () => { unlockAudio(); TM.resume(); }, tSkip: () => TM.skipPhase(),
   tStop: () => { const e = TM.stop(); if (e) toast(e.focusMin ? `${e.focusMin} min Fokus gespeichert` : "Timer beendet"); if (UI.fs) { UI.fs = false; } },

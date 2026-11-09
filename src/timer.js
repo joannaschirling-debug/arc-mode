@@ -101,7 +101,9 @@ export function armFlip(on, onChange) {
       if (pos === "down") {
         if (!t) start(); else if (t.pausedAt) resume();
         buzz();
-      } else if (t && !t.pausedAt && (t.phase === "focus" || t.preset === "free")) pause(true);
+        onChange?.(); return;
+      }
+      if (t && !t.pausedAt && (t.phase === "focus" || t.preset === "free")) { const min = Math.floor(focusTotal(t) / 60000); pause(true); onChange?.(`Angehalten · ${min} min Fokus bisher`); return; }
       onChange?.();
     });
     keepAwake(true);

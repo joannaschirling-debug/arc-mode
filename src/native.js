@@ -120,6 +120,11 @@ export async function createDeviceEvent({ title, start, end, allDay, calendarId,
   catch { return null; }
 }
 
+export async function deleteDeviceEvent(id) {
+  if (!isNative || !id) return false;
+  try { await CapacitorCalendar.deleteEvent({ id }); return true; } catch { return false; }
+}
+
 /* ---------- app lifecycle ---------- */
 export function onResume(fn) {
   if (isNative) App.addListener("appStateChange", s => { if (s.isActive) fn(); });
