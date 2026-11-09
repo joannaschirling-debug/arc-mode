@@ -75,11 +75,14 @@ const hmOf = d => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinu
 // Unified list for one day: {id,title,time,endTime,allDay,kind,device,ref}
 export function appointmentsOn(d) {
   const own = ownEvents().filter(e => e.date === d || (e.endDate && e.date <= d && e.endDate >= d)).map(e => ({
-    id: e.id, title: e.title, time: e.date === d ? e.time || "" : "", endTime: e.endTime || "", allDay: !e.time || e.date !== d, kind: e.kind || "termin", device: false, ref: e
+    id: e.id, title: e.title, time: e.date === d ? e.time || "" : "", endTime: e.endTime || "", allDay: !e.time || e.date !== d, kind: e.kind || "termin", device: false, ref: e,
+    startM: minutesOf(e.time) ?? 0, endM: e.endTime ? minutesOf(e.endTime) : (minutesOf(e.time) ?? 0) + 60
   }));
   const ownKeys = new Set(own.map(e => (e.title + e.time).toLowerCase()));
   const dev = devCache.list.filter(e => ymdOf(e.start) <= d && ymdOf(new Date(e.end - 1)) >= d).map(e => ({
-    id: e.id, title: e.title, time: !e.allDay && ymdOf(e.start) === d ? hmOf(e.start) : "", endTime: !e.allDay ? hmOf(e.end) : "", allDay: e.allDay || ymdOf(e.start) !== d, kind: "termin", device: true, location: e.location, ref: e
+    id: e.id, title: e.title, time: !e.allDay && ymdOf(e.start) === d ? hmOf(e.start) : "", endTime: !e.allDay ? hmOf(e.end) : "", kind: "termin", device: true, location: e.location, ref: e,
+    allDay: e.allDay || (ymdOf(e.start) !== d && ymdOf(e.end) !== d),
+    startM: ymdOf(e.start) === d ? e.start.getHours() * 60 + e.start.getMinutes() : 0, endM: ymdOf(e.end) === d ? e.end.getHours() * 60 + e.end.getMinutes() : 1440
   })).filter(e => !ownKeys.has((e.title + e.time).toLowerCase()) && !own.some(o => o.ref.devId && "dev:" + o.ref.devId === e.id));
   return [...own, ...dev].sort((a, b) => (a.allDay ? "00" : a.time || "99").localeCompare(b.allDay ? "00" : b.time || "99"));
 }

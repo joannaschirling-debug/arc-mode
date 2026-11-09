@@ -67,6 +67,46 @@ function timeline(d, items) {
     ${timed.length ? `<div class="tl">${rows}${tail}</div>` : allDay.length ? "" : `<div class="empty">Keine festen Termine.</div>`}`;
 }
 
+/* ---------- day grid (zoomable, like a calendar app) ---------- */
+UI.hourH = local.get("hourH", 56);
+function dayGrid(d, items) {
+  const allDay = items.filter(a => a.allDay);
+  const timed = items.filter(a => !a.allDay).map(a => ({ ...a, s: a.startM, e: Math.max(a.endM > a.startM ? a.endM : a.startM + 60, a.startM + 20) }));
+  let h0 = 7, h1 = 22;
+  timed.forEach(a => { h0 = Math.min(h0, Math.floor(a.s / 60)); h1 = Math.max(h1, Math.ceil(a.e / 60)); });
+  h1 = Math.min(h1, 24);
+  timed.sort((a, b) => a.s - b.s || b.e - a.e);
+  let cols = [], group = [], groupEnd = -1;
+  const flush = () => { group.forEach(g => g.n = cols.length); cols = []; group = []; };
+  for (const a of timed) {
+    if (a.s >= groupEnd) { flush(); groupEnd = -1; }
+    let c = cols.findIndex(end => end <= a.s); if (c < 0) { c = cols.length; cols.push(a.e); } else cols[c] = a.e;
+    a.c = c; group.push(a); groupEnd = Math.max(groupEnd, a.e);
+  }
+  flush();
+  const nowM = minutesOf(nowHM()), isToday = d === today();
+  const y = m => `calc(var(--h) * ${(m / 60 - h0).toFixed(3)})`;
+  const hours = [...Array(h1 - h0 + 1)].map((_, i) => `<div class="gl" style="top:${y((h0 + i) * 60)}"><span>${pad(h0 + i)}:00</span></div>`).join("");
+  const evs = timed.map(a => {
+    const col = a.ref?.color || (a.kind === "klausur" || a.kind === "pruefung" ? "var(--accent)" : "var(--c-mathe)");
+    const past = isToday && a.e < nowM;
+    return `<button class="ge ${past ? "past" : ""} ${a.e - a.s < 45 ? "short" : ""}" style="--ec:${esc(col)};top:${y(a.s)};height:calc(var(--h) * ${((a.e - a.s) / 60).toFixed(3)} - 2px);left:calc(48px + (100% - 50px) * ${a.c / a.n});width:calc((100% - 50px) / ${a.n} - 3px)" ${a.device ? `data-act="devInfo" data-id="${esc(a.id)}"` : `data-act="editEvent" data-id="${a.id}"`}>
+      <b>${esc(a.title)}</b><small>${pad(Math.floor(a.s / 60))}:${pad(a.s % 60)}–${a.e >= 1440 ? "24:00" : pad(Math.floor(a.e / 60)) + ":" + pad(a.e % 60)}${a.location ? " · " + esc(a.location) : ""}</small></button>`;
+  }).join("");
+  const now = isToday && nowM >= h0 * 60 && nowM <= h1 * 60 ? `<div class="gnow" style="top:${y(nowM)}"><span>${nowHM()}</span></div>` : "";
+  return `${allDay.length ? `<div class="allday">${allDay.map(a => `<button class="pill" ${a.device ? `data-act="devInfo" data-id="${esc(a.id)}"` : `data-act="editEvent" data-id="${a.id}"`}>${a.kind === "klausur" ? "📝 " : ""}${esc(a.title)}</button>`).join("")}</div>` : ""}
+    <div class="gtools"><span class="muted" style="font-size:.78rem">Zoom: zwei Finger oder</span><button class="btn small" data-act="zoom" data-id="-1" aria-label="Verkleinern">−</button><button class="btn small" data-act="zoom" data-id="1" aria-label="Vergrößern">+</button></div>
+    <div class="grid" style="--h:${UI.hourH}px;height:calc(var(--h) * ${h1 - h0} + 14px)">${hours}${evs}${now}</div>`;
+}
+function setupPinch() {
+  const g = $("main .grid"); if (!g || g.dataset.pinch) return; g.dataset.pinch = 1;
+  let d0 = 0, h = UI.hourH;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  g.addEventListener("touchstart", e => { if (e.touches.length === 2) { d0 = dist(e.touches); h = UI.hourH; } }, { passive: true });
+  g.addEventListener("touchmove", e => { if (e.touches.length === 2 && d0) { e.preventDefault(); UI.hourH = Math.max(28, Math.min(160, Math.round(h * dist(e.touches) / d0))); g.style.setProperty("--h", UI.hourH + "px"); } }, { passive: false });
+  g.addEventListener("touchend", () => { if (d0) { d0 = 0; local.set("hourH", UI.hourH); } });
+}
+
 function routineCard(phase, d = today()) {
   const cls = phase === "morning" ? "m" : "e";
   const hs = M.habitsFor(phase, d), done = hs.filter(h => M.habitState(d, h.id) === true).length;
@@ -132,10 +172,10 @@ function viewPlan() {
     const ws = UI.weekStart, d = UI.day;
     const days = [...Array(7)].map((_, i) => addDays(ws, i));
     const appts = M.appointmentsOn(d), due = M.openTasks().filter(x => x.due === d), doneOn = Object.values(S.tasks).filter(x => M.isDone(x) && x.doneAt?.slice(0, 10) === d);
-    body = `<div class="weekhead"><button class="nav" data-act="week" data-id="-7" aria-label="Vorige Woche">‹</button><b>KW ${kw(ws)} · ${fmtDay(ws)} – ${fmtDay(addDays(ws, 6))}</b><button class="nav" data-act="week" data-id="7" aria-label="Nächste Woche">›</button></div>
+    body = `<div class="weekhead"><button class="nav" data-act="week" data-id="-7" aria-label="Vorige Woche">‹</button><button class="wk" data-act="goToday" title="Zu heute springen"><b>KW ${kw(ws)} · ${fmtDay(ws)} – ${fmtDay(addDays(ws, 6))}</b>${ws !== mondayOf(today()) ? `<small>↺ zu heute</small>` : ""}</button><button class="nav" data-act="week" data-id="7" aria-label="Nächste Woche">›</button></div>
       <div class="days">${days.map(x => { const n = M.appointmentsOn(x).length; return `<button class="d ${x === today() ? "today" : ""}" data-act="day" data-id="${x}" aria-pressed="${x === d}"><small>${WD[parse(x).getDay()]}</small><b>${parse(x).getDate()}</b><i>${"<u></u>".repeat(Math.min(n, 3))}</i></button>`; }).join("")}</div>
-      <div class="sec-h"><h2>${WDL[parse(d).getDay()]}, ${fmtDay(d).slice(3)}</h2><button class="btn ghost small" data-act="newEvent" data-date="${d}">+ Termin</button></div>
-      <div class="card">${timeline(d, appts)}</div>
+      <div class="sec-h"><h2>${WDL[parse(d).getDay()]}, ${fmtDay(d).slice(3)}</h2><div class="flex">${d !== today() ? `<button class="btn small primary" data-act="goToday">Heute</button>` : ""}<button class="btn ghost small" data-act="newEvent" data-date="${d}">+ Termin</button></div></div>
+      <div class="card" style="overflow:visible">${dayGrid(d, appts)}</div>
       ${due.length ? `<div class="grp">Fällig an diesem Tag</div><div class="card">${due.map(x => taskRow(x, { pool: d === today() })).join("")}</div>` : ""}
       ${doneOn.length ? `<div class="grp">Erledigt</div><div class="card">${doneOn.map(x => taskRow(x)).join("")}</div>` : ""}
       ${M.focusOn(d) ? `<p class="muted" style="padding-left:4px">Gelernt: ${hm(M.focusOn(d))}</p>` : ""}`;
@@ -385,6 +425,7 @@ function render() {
   TM.visibleGate(UI.tab === "timer" || UI.fs ? !document.hidden : false);
   TM.armFlip(TM.cfg.mode === "flip" && (UI.tab === "timer" || UI.fs), render);
   keepAwake(!!TM.T() && (UI.tab === "timer" || UI.fs));
+  setupPinch();
   rendering = false;
 }
 
@@ -399,6 +440,9 @@ const A = {
   editEvent: id => editEvent(id), newEvent: (_, el) => editEvent(null, el.dataset.date),
   planTab: id => { UI.planTab = id; local.set("planTab", id); render(); },
   filter: id => { UI.filter = id || null; render(); },
+  zoom: n => { UI.hourH = Math.max(28, Math.min(160, Math.round(UI.hourH * (Number(n) > 0 ? 1.3 : 1 / 1.3)))); local.set("hourH", UI.hourH); render(); },
+  devInfo: id => { const a = M.appointmentsOn(UI.tab === "plan" ? UI.day : today()).find(x => x.id === id); if (!a) return; openDlg(`<form><h2>${esc(a.title)}</h2><p class="muted" style="margin:0">${a.allDay ? "ganztägig" : esc(a.time) + (a.endTime ? "–" + esc(a.endTime) : "")}${a.location ? "<br>" + esc(a.location) : ""}<br>aus dem Handy-Kalender</p><div class="drow"><button class="btn primary" value="cancel">OK</button></div></form>`); },
+  goToday: () => { UI.weekStart = mondayOf(today()); UI.day = today(); render(); setTimeout(() => $("main .gnow")?.scrollIntoView({ block: "center", behavior: "smooth" }), 50); },
   week: n => { UI.weekStart = addDays(UI.weekStart, Number(n)); UI.day = UI.weekStart; render(); },
   day: id => { UI.day = id; render(); },
   clearOverdue: () => { const list = M.overdue(); openDlg(`<form><h2>${list.length} überfällige löschen?</h2><div class="pick">${list.map(x => `<div class="item"><div class="tx"><span>${esc(x.title)}</span><small>${fmtDay(x.due)}</small></div></div>`).join("")}</div><div class="drow"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn primary" value="save" style="background:var(--bad)">Alle löschen</button></div></form>`, () => { const b = M.deleteOverdue(); toast(`${b.length} gelöscht`, () => M.restore(b)); }); },

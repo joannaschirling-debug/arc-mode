@@ -105,8 +105,11 @@ export async function deviceEvents(fromDate, toDate) {
   if (!isNative) return [];
   try {
     const r = await CapacitorCalendar.listEventsInRange({ from: fromDate.getTime(), to: toDate.getTime() });
+    // All-day events are stored at UTC midnight; read their calendar date in UTC so they land on the right day.
+    const utcDay = ms => { const x = new Date(ms); return new Date(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()); };
     return (r.result || []).map(e => ({
-      id: "dev:" + e.id, devId: e.id, title: e.title || "(ohne Titel)", start: new Date(e.startDate), end: new Date(e.endDate),
+      id: "dev:" + e.id, devId: e.id, title: e.title || "(ohne Titel)",
+      start: e.isAllDay ? utcDay(e.startDate) : new Date(e.startDate), end: e.isAllDay ? utcDay(e.endDate) : new Date(e.endDate),
       allDay: !!e.isAllDay, calendarId: e.calendarId, color: e.color, location: e.location, device: true
     }));
   } catch { return []; }
