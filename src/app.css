@@ -146,3 +146,5 @@ body{padding-top:env(safe-area-inset-top,0px)}
 #fs.break .fbar i{background:var(--break2)}
 #fs .flab{font-size:1rem;top:14px;left:18px}
 @media (orientation:landscape){#fs{gap:12px}#fs .phase-l{display:none}}
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30}
+.ge{background:color-mix(in srgb,var(--ec) 32%,var(--surface))}

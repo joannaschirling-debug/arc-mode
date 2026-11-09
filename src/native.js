@@ -99,7 +99,16 @@ export async function calendarPermission(request = false) {
 }
 export async function listCalendars() {
   if (!isNative) return [];
-  try { return (await CapacitorCalendar.listCalendars()).result || []; } catch { return []; }
+  try { return ((await CapacitorCalendar.listCalendars()).result || []).map(c => ({ ...c, color: normColor(c.color) })); } catch { return []; }
+}
+// Android calendar colors arrive as signed ARGB ints or #AARRGGBB strings; CSS needs #RRGGBB.
+export function normColor(c) {
+  if (c == null || c === "") return null;
+  if (typeof c === "number" || /^-?\d+$/.test(String(c))) { const n = (Number(c) >>> 0) & 0xffffff; return "#" + n.toString(16).padStart(6, "0"); }
+  const s = String(c).trim();
+  if (/^#[0-9a-f]{8}$/i.test(s)) return "#" + s.slice(3);
+  if (/^#[0-9a-f]{6}$/i.test(s) || /^#[0-9a-f]{3}$/i.test(s)) return s;
+  return null;
 }
 export async function deviceEvents(fromDate, toDate) {
   if (!isNative) return [];
@@ -110,7 +119,7 @@ export async function deviceEvents(fromDate, toDate) {
     return (r.result || []).map(e => ({
       id: "dev:" + e.id, devId: e.id, title: e.title || "(ohne Titel)",
       start: e.isAllDay ? utcDay(e.startDate) : new Date(e.startDate), end: e.isAllDay ? utcDay(e.endDate) : new Date(e.endDate),
-      allDay: !!e.isAllDay, calendarId: e.calendarId, color: e.color, location: e.location, device: true
+      allDay: !!e.isAllDay, calendarId: e.calendarId, color: normColor(e.color), location: e.location, device: true
     }));
   } catch { return []; }
 }

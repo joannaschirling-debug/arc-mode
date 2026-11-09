@@ -88,7 +88,7 @@ function dayGrid(d, items) {
   const y = m => `calc(var(--h) * ${(m / 60 - h0).toFixed(3)})`;
   const hours = [...Array(h1 - h0 + 1)].map((_, i) => `<div class="gl" style="top:${y((h0 + i) * 60)}"><span>${pad(h0 + i)}:00</span></div>`).join("");
   const evs = timed.map(a => {
-    const col = a.ref?.color || (a.kind === "klausur" || a.kind === "pruefung" ? "var(--accent)" : "var(--c-mathe)");
+    const col = (a.ref?.color && /^#[0-9a-f]{3,6}$/i.test(a.ref.color) ? a.ref.color : null) || (a.kind === "klausur" || a.kind === "pruefung" ? "var(--accent)" : "var(--c-mathe)");
     const past = isToday && a.e < nowM;
     return `<button class="ge ${past ? "past" : ""} ${a.e - a.s < 45 ? "short" : ""}" style="--ec:${esc(col)};top:${y(a.s)};height:calc(var(--h) * ${((a.e - a.s) / 60).toFixed(3)} - 2px);left:calc(48px + (100% - 50px) * ${a.c / a.n});width:calc((100% - 50px) / ${a.n} - 3px)" ${a.device ? `data-act="devInfo" data-id="${esc(a.id)}"` : `data-act="editEvent" data-id="${a.id}"`}>
       <b>${esc(a.title)}</b><small>${pad(Math.floor(a.s / 60))}:${pad(a.s % 60)}–${a.e >= 1440 ? "24:00" : pad(Math.floor(a.e / 60)) + ":" + pad(a.e % 60)}${a.location ? " · " + esc(a.location) : ""}</small></button>`;
