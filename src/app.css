@@ -1,7 +1,7 @@
 /* Arc Mode 3 additions on top of base.css (same tokens as the artifact version) */
 :root{ --focus:#7a62e0; --focus2:#a48bf5; --break:#3fb68b; --break2:#8fdcb9; --bg-focus:#1d1636; --bg-break:#0f2a22; }
 body{padding-top:env(safe-area-inset-top,0px)}
-.pill{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.pill{border:0;font-family:inherit;display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
 .pill i{width:8px;height:8px;border-radius:50%;display:inline-block}
 .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
 .prio1{box-shadow:inset 3px 0 0 var(--bad)}
@@ -9,17 +9,17 @@ body{padding-top:env(safe-area-inset-top,0px)}
 .syncdot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
 .syncdot.ok{background:var(--good)}.syncdot.off{background:var(--bad)}
 /* timeline of fixed appointments */
-.tl{position:relative;padding:6px 14px 10px 62px}
+.tl{position:relative;padding:6px 14px 10px 74px}
 .tl-row{position:relative;padding:8px 0;min-height:44px}
-.tl-time{position:absolute;left:-50px;top:9px;width:42px;text-align:right;font-weight:700;font-size:.82rem;font-variant-numeric:tabular-nums;color:var(--muted)}
-.tl::before{content:"";position:absolute;left:52px;top:14px;bottom:14px;width:2px;background:var(--line);border-radius:2px}
+.tl-time{position:absolute;left:-66px;top:9px;width:50px;white-space:nowrap;text-align:right;font-weight:700;font-size:.82rem;font-variant-numeric:tabular-nums;color:var(--muted)}
+.tl::before{content:"";position:absolute;left:64px;top:14px;bottom:14px;width:2px;background:var(--line);border-radius:2px}
 .tl-dot{position:absolute;left:-14px;top:14px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--surface)}
 .tl-row.past{opacity:.5}
 .tl-row.dev .tl-dot{background:var(--c-mathe)}
 .tl-row b{display:block;font-weight:700;overflow-wrap:anywhere}
 .tl-row small{color:var(--muted);font-size:.78rem}
 .tl-now{position:relative;height:0;border-top:2px dashed var(--bad);margin:2px 0}
-.tl-now span{position:absolute;left:-58px;top:-10px;font-size:.7rem;font-weight:800;color:var(--bad);background:var(--surface);padding:0 3px}
+.tl-now span{position:absolute;left:-70px;top:-10px;font-size:.7rem;font-weight:800;color:var(--bad);background:var(--surface);padding:0 3px}
 .allday{display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px 0}
 /* heatmap */
 .heat{display:grid;grid-template-columns:auto repeat(7,1fr);gap:4px;padding:12px 14px;align-items:center}
