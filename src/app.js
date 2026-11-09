@@ -41,7 +41,7 @@ function taskRow(t, o = {}) {
   const done = M.isDone(t), late = !done && t.due && t.due < today();
   return `<div class="item ${done ? "on" : ""} ${!done && t.prio === 1 ? "prio1" : ""}">
     <button class="check ${done ? "on" : ""}" data-act="toggleTask" data-id="${t.id}" aria-label="${esc(t.title)}: ${done ? "erledigt" : "offen"}"></button>
-    <div class="tx"><span>${esc(t.title)}</span>
+    <div class="tx" data-act="showTask" data-id="${t.id}" style="cursor:pointer"><span>${esc(t.title)}</span>
       <small class="num" ${late ? 'style="color:var(--bad)"' : ""}>${t.due ? (late ? "überfällig · " : "bis ") + fmtDay(t.due) : "ohne Datum"}${t.est ? " · ~" + hm(t.est) : ""}${t.bumped ? ` · ${t.bumped}× verschoben` : ""}</small>
       ${t.tags?.length ? `<div class="tags">${tagPills(t.tags)}</div>` : ""}${t.note ? `<span class="note">${esc(t.note)}</span>` : ""}</div>
     ${o.pool ? `<button class="btn small" data-act="toFocus" data-id="${t.id}" aria-label="In Heute-Fokus">+ Heute</button>` : ""}
@@ -63,7 +63,7 @@ function timeline(d, items) {
     return s;
   }).join("");
   const tail = !nowShown && timed.length ? `<div class="tl-now"><span>${nowHM()}</span></div>` : "";
-  return `${allDay.length ? `<div class="allday">${allDay.map(a => `<button class="pill" ${a.device ? "" : `data-act="editEvent" data-id="${a.id}"`}>${a.kind === "klausur" ? "📝 " : ""}${esc(a.title)}</button>`).join("")}</div>` : ""}
+  return `${allDay.length ? `<div class="allday">${allDay.map(a => `<button class="pill" ${a.device ? "" : `data-act="showEvent" data-id="${a.id}"`}>${a.kind === "klausur" ? "📝 " : ""}${esc(a.title)}</button>`).join("")}</div>` : ""}
     ${timed.length ? `<div class="tl">${rows}${tail}</div>` : allDay.length ? "" : `<div class="empty">Keine festen Termine.</div>`}`;
 }
 
@@ -90,11 +90,11 @@ function dayGrid(d, items) {
   const evs = timed.map(a => {
     const col = (a.ref?.color && /^#[0-9a-f]{3,6}$/i.test(a.ref.color) ? a.ref.color : null) || (a.kind === "klausur" || a.kind === "pruefung" ? "var(--accent)" : "var(--c-mathe)");
     const past = isToday && a.e < nowM;
-    return `<button class="ge ${past ? "past" : ""} ${a.e - a.s < 45 ? "short" : ""}" style="--ec:${esc(col)};top:${y(a.s)};height:calc(var(--h) * ${((a.e - a.s) / 60).toFixed(3)} - 2px);left:calc(48px + (100% - 50px) * ${a.c / a.n});width:calc((100% - 50px) / ${a.n} - 3px)" ${a.device ? `data-act="devInfo" data-id="${esc(a.id)}"` : `data-act="editEvent" data-id="${a.id}"`}>
+    return `<button class="ge ${past ? "past" : ""} ${a.e - a.s < 45 ? "short" : ""}" style="--ec:${esc(col)};top:${y(a.s)};height:calc(var(--h) * ${((a.e - a.s) / 60).toFixed(3)} - 2px);left:calc(48px + (100% - 50px) * ${a.c / a.n});width:calc((100% - 50px) / ${a.n} - 3px)" ${a.device ? `data-act="devInfo" data-id="${esc(a.id)}"` : `data-act="showEvent" data-id="${a.id}"`}>
       <b>${esc(a.title)}</b><small>${pad(Math.floor(a.s / 60))}:${pad(a.s % 60)}–${a.e >= 1440 ? "24:00" : pad(Math.floor(a.e / 60)) + ":" + pad(a.e % 60)}${a.location ? " · " + esc(a.location) : ""}</small></button>`;
   }).join("");
   const now = isToday && nowM >= h0 * 60 && nowM <= h1 * 60 ? `<div class="gnow" style="top:${y(nowM)}"><span>${nowHM()}</span></div>` : "";
-  return `${allDay.length ? `<div class="allday">${allDay.map(a => `<button class="pill" ${a.device ? `data-act="devInfo" data-id="${esc(a.id)}"` : `data-act="editEvent" data-id="${a.id}"`}>${a.kind === "klausur" ? "📝 " : ""}${esc(a.title)}</button>`).join("")}</div>` : ""}
+  return `${allDay.length ? `<div class="allday">${allDay.map(a => `<button class="pill" ${a.device ? `data-act="devInfo" data-id="${esc(a.id)}"` : `data-act="showEvent" data-id="${a.id}"`}>${a.kind === "klausur" ? "📝 " : ""}${esc(a.title)}</button>`).join("")}</div>` : ""}
     <div class="gtools"><span class="muted" style="font-size:.78rem">Zoom: zwei Finger oder</span><button class="btn small" data-act="zoom" data-id="-1" aria-label="Verkleinern">−</button><button class="btn small" data-act="zoom" data-id="1" aria-label="Vergrößern">+</button></div>
     <div class="grid" style="--h:${UI.hourH}px;height:calc(var(--h) * ${h1 - h0} + 14px)">${hours}${evs}${now}</div>`;
 }
@@ -136,7 +136,7 @@ function viewHeute() {
   ${nextAppt || nextTask ? `<div class="nextline"><span class="muted">${nextAppt ? "Nächster Termin · " + esc(nextAppt.time) : "Als Nächstes"}</span> <b>${esc((nextAppt || nextTask).title)}</b></div>` : ""}
   ${v ? `<div class="verse sm">${esc(v.text)} <cite>${esc(v.ref)}</cite></div>` : ""}
   ${timer ? `<div class="banner"><div class="tx"><b>${timer.pausedAt ? "Timer pausiert" : timer.phase === "break" ? "Pause läuft" : "Fokus läuft"}</b> · ${esc(M.tag(timer.category).name)}</div><button class="btn primary small" data-go="timer">Öffnen</button></div>` : ""}
-  ${cds.length ? `<div class="cds">${cds.slice(0, UI.open.cdAll ? 99 : 4).map(e => { const n = Math.max(0, daysUntil(e.date)); return `<button class="cd ${e.kind === "klausur" || e.kind === "pruefung" ? "exam" : ""} ${n <= 3 ? "soon" : ""}" data-act="editEvent" data-id="${e.id}"><b class="num">${n === 0 ? "heute" : n + " T"}</b><span>${esc(e.short || e.title)}</span></button>`; }).join("")}${cds.length > 4 ? `<button class="cd more" data-act="toggleOpen" data-id="cdAll">${UI.open.cdAll ? "weniger" : "+" + (cds.length - 4) + " mehr"}</button>` : ""}</div>` : ""}
+  ${cds.length ? `<div class="cds">${cds.slice(0, UI.open.cdAll ? 99 : 4).map(e => { const n = Math.max(0, daysUntil(e.date)); return `<button class="cd ${e.kind === "klausur" || e.kind === "pruefung" ? "exam" : ""} ${n <= 3 ? "soon" : ""}" data-act="showEvent" data-id="${e.id}"><b class="num">${n === 0 ? "heute" : n + " T"}</b><span>${esc(e.short || e.title)}</span></button>`; }).join("")}${cds.length > 4 ? `<button class="cd more" data-act="toggleOpen" data-id="cdAll">${UI.open.cdAll ? "weniger" : "+" + (cds.length - 4) + " mehr"}</button>` : ""}</div>` : ""}
   <section class="sec"><div class="sec-h"><h2>Termine heute</h2><button class="btn ghost small" data-act="newEvent" data-date="${t}">+ Termin</button></div>
     <div class="card">${timeline(t, appts)}</div></section>
   <section class="sec"><div class="sec-h"><h2>Heute-Fokus</h2><button class="btn ghost small" data-act="pickFocus">+ Aus Pool</button></div>
@@ -164,7 +164,7 @@ function viewPlan() {
     const past = M.ownEvents().filter(e => (e.endDate || e.date) < t);
     body = `<button class="add" data-act="newEvent" data-date="${t}">+ Termin, Klausur oder Abgabe</button>
       ${!settings().calendarOn && calendarAvailable ? `<div class="banner"><div class="tx">Handy-Kalender verbinden, dann erscheinen deine Termine automatisch.</div><button class="btn small primary" data-act="connectCal">Verbinden</button></div>` : ""}
-      <div class="card">${list.map(e => `<div class="item"><div class="tx"><span>${esc(e.title)}</span><small class="num">${fmtDay(e.date)}${e.time ? " · " + esc(e.time) : " · ganztägig"}${e.endDate ? " bis " + fmtDay(e.endDate) : ""}${M.hasCountdown(e) ? " · Countdown" : ""}</small></div><span class="tag ${e.kind === "klausur" || e.kind === "pruefung" ? "klausur" : ""}">${KIND[e.kind] || "Termin"}</span><button class="btn ghost small" data-act="editEvent" data-id="${e.id}" aria-label="Bearbeiten">⋯</button></div>`).join("") || `<div class="empty">Keine eigenen Termine. Termine aus dem Handy-Kalender siehst du unter Heute und Woche.</div>`}</div>
+      <div class="card">${list.map(e => `<div class="item"><div class="tx" data-act="showEvent" data-id="${e.id}" style="cursor:pointer"><span>${esc(e.title)}</span><small class="num">${fmtDay(e.date)}${e.time ? " · " + esc(e.time) : " · ganztägig"}${e.endDate ? " bis " + fmtDay(e.endDate) : ""}${M.hasCountdown(e) ? " · Countdown" : ""}</small></div><span class="tag ${e.kind === "klausur" || e.kind === "pruefung" ? "klausur" : ""}">${KIND[e.kind] || "Termin"}</span><button class="btn ghost small" data-act="editEvent" data-id="${e.id}" aria-label="Bearbeiten">⋯</button></div>`).join("") || `<div class="empty">Keine eigenen Termine. Termine aus dem Handy-Kalender siehst du unter Heute und Woche.</div>`}</div>
       ${past.length ? `<button class="btn ghost small" data-act="clearPastEvents">${past.length} vergangene Termine aufräumen</button>` : ""}`;
   } else {
     const ws = UI.weekStart, d = UI.day;
@@ -462,6 +462,29 @@ const A = {
   zoom: n => { UI.hourH = Math.max(28, Math.min(160, Math.round(UI.hourH * (Number(n) > 0 ? 1.3 : 1 / 1.3)))); local.set("hourH", UI.hourH); render(); },
   devInfo: id => { const a = M.appointmentsOn(UI.tab === "plan" ? UI.day : today()).find(x => x.id === id); if (!a) return; openDlg(`<form><h2>${esc(a.title)}</h2><p class="muted" style="margin:0">${a.allDay ? "ganztägig" : esc(a.time) + (a.endTime ? "–" + esc(a.endTime) : "")}${a.location ? "<br>" + esc(a.location) : ""}<br>aus dem Handy-Kalender</p><div class="drow"><button class="btn danger grow" value="delete">Im Handy-Kalender löschen</button><button class="btn primary" value="cancel">OK</button></div></form>`, async (f, act) => { if (act === "delete") { const ok = await deleteDeviceEvent(a.ref.devId); toast(ok ? "Termin gelöscht" : "Löschen nicht möglich"); await refreshCal(); } }); },
   goToday: () => { UI.weekStart = mondayOf(today()); UI.day = today(); render(); setTimeout(() => $("main .gnow")?.scrollIntoView({ block: "center", behavior: "smooth" }), 50); },
+  showEvent: id => {
+    const e = S.events[id]; if (!e) return;
+    const n = daysUntil(e.date), when = n === 0 ? "heute" : n > 0 ? `in ${n} ${n === 1 ? "Tag" : "Tagen"}` : `vor ${-n} ${n === -1 ? "Tag" : "Tagen"}`;
+    openDlg(`<form><span class="tag ${e.kind === "klausur" || e.kind === "pruefung" ? "klausur" : ""}" style="align-self:flex-start">${KIND[e.kind] || "Termin"}</span><h2>${esc(e.title)}</h2>
+      <div class="detail"><div><span>Datum</span><b>${WDL[parse(e.date).getDay()]}, ${fmtDay(e.date).slice(3)}${e.endDate ? " bis " + fmtDay(e.endDate) : ""} · ${when}</b></div>
+      <div><span>Uhrzeit</span><b>${e.time ? esc(e.time) + (e.endTime ? "–" + esc(e.endTime) : "") : "ganztägig"}</b></div>
+      ${e.short && e.short !== e.title ? `<div><span>Countdown-Name</span><b>${esc(e.short)}</b></div>` : ""}
+      ${e.place ? `<div><span>Ort</span><b>${esc(e.place)}</b></div>` : ""}${e.note ? `<div><span>Notiz</span><b>${esc(e.note)}</b></div>` : ""}</div>
+      <div class="drow"><button class="btn grow" value="edit">Bearbeiten</button><button class="btn primary" value="cancel">Schließen</button></div></form>`, (f, act) => { if (act === "edit") setTimeout(() => editEvent(id), 50); });
+  },
+  showTask: id => {
+    const t = S.tasks[id]; if (!t) return;
+    openDlg(`<form><div class="tags">${tagPills(t.tags)}</div><h2>${esc(t.title)}</h2>
+      <div class="detail"><div><span>Fällig</span><b>${t.due ? WDL[parse(t.due).getDay()] + ", " + fmtDay(t.due).slice(3) : "ohne Datum"}</b></div>
+      <div><span>Priorität</span><b>${({ 1: "Hoch", 2: "Normal", 3: "Niedrig" })[t.prio || 2]}</b></div>
+      ${t.est ? `<div><span>Dauer ca.</span><b>${hm(t.est)}</b></div>` : ""}
+      <div><span>Status</span><b>${M.isDone(t) ? "erledigt" + (t.doneAt ? " am " + fmtDay(t.doneAt.slice(0, 10)) : "") : t.focusDate === today() ? "im Heute-Fokus" : "im Pool"}</b></div>
+      ${t.note ? `<div><span>Notiz</span><b style="white-space:pre-wrap">${esc(t.note)}</b></div>` : ""}</div>
+      <div class="drow"><button class="btn grow" value="edit">Bearbeiten</button>${!M.isDone(t) && t.focusDate !== today() ? `<button class="btn" value="focus">+ Heute</button>` : ""}<button class="btn primary" value="cancel">Schließen</button></div></form>`, (f, act) => {
+      if (act === "edit") setTimeout(() => editTask(id), 50);
+      if (act === "focus") put("tasks", id, { focusDate: today() });
+    });
+  },
   week: n => { UI.weekStart = addDays(UI.weekStart, Number(n)); UI.day = UI.weekStart; render(); },
   day: id => { UI.day = id; render(); },
   clearOverdue: () => { const list = M.overdue(); openDlg(`<form><h2>${list.length} überfällige löschen?</h2><div class="pick">${list.map(x => `<div class="item"><div class="tx"><span>${esc(x.title)}</span><small>${fmtDay(x.due)}</small></div></div>`).join("")}</div><div class="drow"><button class="btn" value="cancel" formnovalidate>Abbrechen</button><button class="btn primary" value="save" style="background:var(--bad)">Alle löschen</button></div></form>`, () => { const b = M.deleteOverdue(); toast(`${b.length} gelöscht`, () => M.restore(b)); }); },

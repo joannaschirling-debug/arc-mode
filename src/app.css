@@ -148,3 +148,4 @@ body{padding-top:env(safe-area-inset-top,0px)}
 @media (orientation:landscape){#fs{gap:12px}#fs .phase-l{display:none}}
 body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30}
 .ge{background:color-mix(in srgb,var(--ec) 32%,var(--surface))}
+.detail{display:flex;flex-direction:column;gap:10px;background:var(--sunk);border-radius:16px;padding:12px 14px}.detail div{display:flex;flex-direction:column;gap:1px}.detail span{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.detail b{font-weight:600;overflow-wrap:anywhere}
